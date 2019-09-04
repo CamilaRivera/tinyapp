@@ -3,6 +3,7 @@ const app = express();
 const PORT = 8080; // default port 8080
 const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
+const bcrypt = require('bcrypt');
 
 app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -24,17 +25,17 @@ const users = {
   "userRandomID": {
     id: "userRandomID",
     email: "user@example.com",
-    password: "purple-monkey-dinosaur"
+    password: bcrypt.hashSync('purple-monkey-dinosaur', 10)
   },
   "user2RandomID": {
     id: "user2RandomID",
     email: "user2@example.com",
-    password: "dishwasher-funk"
+    password: bcrypt.hashSync('dishwasher-funk', 10)
   },
   "camila": {
     id: "camila",
     email: "camila@example.com",
-    password: "1234"
+    password: bcrypt.hashSync('1234', 10)
   }
 }
 
@@ -49,8 +50,8 @@ function checkEmailRepetition(users, email) {
 
 function urlsForUser(id) {
   urlDatabasePerId = {};
-  for(const url in urlDatabase){
-    if(id === urlDatabase[url].userID){
+  for (const url in urlDatabase) {
+    if (id === urlDatabase[url].userID) {
       urlDatabasePerId[url] = urlDatabase[url].longURL;
     }
   }
@@ -64,12 +65,12 @@ function generateRandomString() {
 
 app.get("/urls", (req, res) => {
   let templateVars = { urls: urlsForUser(req.cookies.user_id), user: users[req.cookies.user_id] };
-  res.render("urls_index", templateVars); 
+  res.render("urls_index", templateVars);
 });
 
 app.get("/register", (req, res) => {
   let templateVars = { user: users[req.cookies.user_id] };
-  res.render("registration", templateVars);
+  res.render("register", templateVars);
 });
 
 app.get("/login", (req, res) => {
@@ -79,13 +80,13 @@ app.get("/login", (req, res) => {
 
 app.post("/login", (req, res) => {
   const user = checkEmailRepetition(users, req.body.email);
-  if (user !== null && req.body.password === user.password) {
+  if (user !== null && bcrypt.compareSync(req.body.password, user.password)) {
     res.cookie('user_id', user.id);
     res.redirect('/urls');
   } else {
     res.status(403);
     res.redirect('https://http.cat/403');
-  } 
+  }
 });
 
 app.post("/register", (req, res) => {
@@ -94,11 +95,14 @@ app.post("/register", (req, res) => {
     res.redirect('https://http.cat/400');
   } else {
     let randomId = generateRandomString();
+    const password = req.body.password; // found in the req.params object
+    const hashedPassword = bcrypt.hashSync(password, 10);
     users[randomId] = {
       id: randomId,
       email: req.body.email,
-      password: req.body.password
+      password: hashedPassword
     };
+    console.log(users);
     res.cookie('user_id', randomId);
     res.redirect("urls_index");
   }
@@ -106,7 +110,7 @@ app.post("/register", (req, res) => {
 
 app.get("/urls/new", (req, res) => {
   let templateVars = { user: users[req.cookies.user_id] };
-  if(req.cookies.user_id === undefined){
+  if (req.cookies.user_id === undefined) {
     res.redirect("/login");
   }
   res.render("urls_new", templateVars);
@@ -114,10 +118,11 @@ app.get("/urls/new", (req, res) => {
 
 app.post("/urls", (req, res) => {
   let randomString = generateRandomString();
-  urlDatabase[randomString] = req.body.longURL;
-  if (!req.body.longURL.startsWith('http://') && !req.body.longURL.startsWith('https://')) {
-    urlDatabase[randomString] = 'http://' + req.body.longURL;
+  let longURL= req.body.longURL; 
+  if (!longURL.startsWith('http://') && !longURL.startsWith('https://')) {
+    longURL = 'http://' + longURL;
   }
+  urlDatabase[randomString] = { longURL: longURL , userID: req.cookies.user_id};
   console.log(urlDatabase);  // Log the POST request body to the console
   res.redirect('/urls/' + randomString);
 });
@@ -127,13 +132,13 @@ app.post("/urls", (req, res) => {
 // }
 
 app.post("/urls/:shortURL/delete", (req, res) => {
-  if(urlDatabase[req.params.shortURL].userID === req.cookies.user_id){
-  delete urlDatabase[req.params.shortURL];
-  res.redirect('/urls/');
+  if (urlDatabase[req.params.shortURL].userID === req.cookies.user_id) {
+    delete urlDatabase[req.params.shortURL];
+    res.redirect('/urls/');
   } else {
     console
     res.redirect('https://http.cat/403');
-  } 
+  }
   console.log(urlDatabase);
 });
 
@@ -150,13 +155,13 @@ app.get("/urls/:shortURL", (req, res) => {
 app.post("/urls/:shortURL/edit", (req, res) => {
   console.log(urlDatabase[req.params.shortURL]);
   console.log(req.cookies.user_id);
-  if(urlDatabase[req.params.shortURL].userID === req.cookies.user_id){
+  if (urlDatabase[req.params.shortURL].userID === req.cookies.user_id) {
     urlDatabase[req.params.shortURL] = { longURL: req.body.longURL, userID: req.cookies.user_id }
     res.redirect('/urls/');
   } else {
     res.status(403);
     res.redirect('https://http.cat/403');
-  } 
+  }
 });
 
 app.post("/logout", (req, res) => {
