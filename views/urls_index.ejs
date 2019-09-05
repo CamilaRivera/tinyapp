@@ -10,15 +10,13 @@
     integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
   <title>TinyApp</title>
 </head>
-<header>
-  <% include ./partials/_header %>
-</header>
 
 <body>
+  <% include ./partials/_header %>
   <main style="margin: 1em;">
-      <% if(user === undefined) { %> 
-        <h5>Please login</h5>
-      <% } else { %>
+    <% if(user === undefined) { %>
+    <h5>Please login</h5>
+    <% } else { %>
     <h3>My URLs</h3>
     <table class="table">
       <thead>
@@ -44,7 +42,7 @@
           </td>
         </tr>
         <% } %>
-        
+
       </tbody>
     </table>
     <a href="/urls/new">Create a New Short Link</a>

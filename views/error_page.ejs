@@ -10,11 +10,9 @@
     integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
   <title>TinyApp</title>
 </head>
-<header>
-  <% include ./partials/_header %>
-</header>
 
 <body>
+  <% include ./partials/_header %>
   <main style="margin: 1em;">
     <h5>Error <%= errorCode %>!</h5>
     <img src="https://http.cat/<%= errorCode %>">
