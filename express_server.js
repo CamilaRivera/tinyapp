@@ -1,6 +1,6 @@
 const express = require("express");
 const app = express();
-const PORT = 8080; 
+const PORT = 8080;
 const bodyParser = require("body-parser");
 const cookieSession = require("cookie-session");
 const bcrypt = require('bcrypt');
@@ -64,17 +64,31 @@ function generateRandomString() {
   return Math.random().toString(36).substring(2, 5) + Math.random().toString(36).substring(2, 5);
 }
 
+app.get("/", (req, res) => {
+  if (users[req.session.user_id] === undefined) {
+    res.redirect("/login");
+  } else {
+    res.redirect("/urls");
+  }
+});
+
 app.get("/urls", (req, res) => {
   let templateVars = { urls: urlsForUser(req.session.user_id), user: users[req.session.user_id] };
   res.render("urls_index", templateVars);
 });
 
 app.get("/register", (req, res) => {
+  if (users[req.session.user_id] !== undefined) {
+    res.redirect("/urls");
+  }
   let templateVars = { user: users[req.session.user_id] };
   res.render("register", templateVars);
 });
 
 app.get("/login", (req, res) => {
+  if (users[req.session.user_id] !== undefined) {
+    res.redirect("/urls");
+  }
   let templateVars = { user: users[req.session.user_id] };
   res.render("login", templateVars);
 });
@@ -96,7 +110,7 @@ app.post("/register", (req, res) => {
     res.redirect('https://http.cat/400');
   } else {
     let randomId = generateRandomString();
-    const password = req.body.password; 
+    const password = req.body.password;
     const hashedPassword = bcrypt.hashSync(password, 10);
     users[randomId] = {
       id: randomId,
@@ -117,12 +131,15 @@ app.get("/urls/new", (req, res) => {
 });
 
 app.post("/urls", (req, res) => {
+  if (users[req.session.user_id] === undefined) {
+    res.redirect("/login");
+  }
   let randomString = generateRandomString();
-  let longURL= req.body.longURL; 
+  let longURL = req.body.longURL;
   if (!longURL.startsWith('http://') && !longURL.startsWith('https://')) {
     longURL = 'http://' + longURL;
   }
-  urlDatabase[randomString] = { longURL: longURL , userID: req.session.user_id};
+  urlDatabase[randomString] = { longURL: longURL, userID: req.session.user_id };
   res.redirect('/urls/' + randomString);
 });
 
@@ -130,26 +147,43 @@ app.post("/urls/:shortURL/delete", (req, res) => {
   if (urlDatabase[req.params.shortURL].userID === req.session.user_id) {
     delete urlDatabase[req.params.shortURL];
     res.redirect('/urls/');
-  } else {
+  } else if (urlDatabase[req.params.shortURL].userID !== req.session.user_id){
     res.status(403);
     res.redirect('https://http.cat/403');
+  } else if(users[req.session.user_id] === undefined){
+    res.redirect("/login");
   }
 });
 
 app.get("/u/:shortURL", (req, res) => {
+  if (urlDatabase[req.params.shortURL] === undefined) {
+    res.send("That URL is not defined");
+  }
   const longURL = urlDatabase[req.params.shortURL].longURL;
   res.redirect(longURL);
 });
 
 app.get("/urls/:shortURL", (req, res) => {
-  let templateVars = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL, user: users[req.session.user_id] };
-  res.render("urls_show", templateVars);
+  let userURLs = urlsForUser(req.session.user_id);
+  if (urlDatabase[req.params.shortURL] !== undefined) {
+    if (userURLs[req.params.shortURL] === undefined && urlDatabase[req.params.shortURL] !== undefined) {
+      res.status(401);
+      res.redirect('https://http.cat/401');
+    }
+    let templateVars = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL, user: users[req.session.user_id] };
+    res.render("urls_show", templateVars);
+  } else if (urlDatabase[req.params.shortURL] === undefined && users[req.session.user_id] !== undefined) {
+    res.status(204);
+    res.redirect('https://http.cat/204');
+  } else if (users[req.session.user_id] === undefined) {
+    res.redirect("/login");
+  }
 });
 
-app.post("/urls/:shortURL/edit", (req, res) => {
+app.post("/urls/:shortURL", (req, res) => {
   if (urlDatabase[req.params.shortURL].userID === req.session.user_id) {
     urlDatabase[req.params.shortURL] = { longURL: req.body.longURL, userID: req.session.user_id }
-    res.redirect('/urls/');
+    res.redirect('/urls');
   } else {
     res.status(403);
     res.redirect('https://http.cat/403');
@@ -158,7 +192,7 @@ app.post("/urls/:shortURL/edit", (req, res) => {
 
 app.post("/logout", (req, res) => {
   req.session = null;
-  res.redirect('/urls/');
+  res.redirect('/urls');
 });
 
 app.get("/urls.json", (req, res) => {
