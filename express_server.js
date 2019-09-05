@@ -1,3 +1,6 @@
+const { getUserByEmail } = require('./helpers');
+const { urlsForUser } = require('./helpers');
+const { generateRandomString } = require('./helpers');
 const express = require("express");
 const app = express();
 const PORT = 8080;
@@ -8,8 +11,6 @@ const bcrypt = require('bcrypt');
 app.use(cookieSession({
   name: 'session',
   keys: ["hola"],
-
-  // Cookie Options
   maxAge: 24 * 60 * 60 * 1000 // 24 hours
 }))
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -40,30 +41,6 @@ const users = {
   }
 }
 
-function checkEmailRepetition(users, email) {
-  for (const user in users) {
-    if (users[user].email === email) {
-      return users[user];
-    }
-  }
-  return null;
-}
-
-function urlsForUser(id) {
-  urlDatabasePerId = {};
-  for (const url in urlDatabase) {
-    if (id === urlDatabase[url].userID) {
-      urlDatabasePerId[url] = urlDatabase[url].longURL;
-    }
-  }
-  return urlDatabasePerId;
-}
-
-
-function generateRandomString() {
-  return Math.random().toString(36).substring(2, 5) + Math.random().toString(36).substring(2, 5);
-}
-
 app.get("/", (req, res) => {
   if (users[req.session.user_id] === undefined) {
     res.redirect("/login");
@@ -73,7 +50,7 @@ app.get("/", (req, res) => {
 });
 
 app.get("/urls", (req, res) => {
-  let templateVars = { urls: urlsForUser(req.session.user_id), user: users[req.session.user_id] };
+  let templateVars = { urls: urlsForUser(req.session.user_id, urlDatabase), user: users[req.session.user_id] };
   res.render("urls_index", templateVars);
 });
 
@@ -94,20 +71,20 @@ app.get("/login", (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  const user = checkEmailRepetition(users, req.body.email);
-  if (user !== null && bcrypt.compareSync(req.body.password, user.password)) {
+  const user = getUserByEmail(users, req.body.email);
+  if (user !== undefined && bcrypt.compareSync(req.body.password, user.password)) {
     req.session.user_id = user.id;
     res.redirect('/urls');
   } else {
     res.status(403);
-    res.redirect('https://http.cat/403');
+    res.render('error_page', { errorCode: 403, user: users[req.session.user_id] });
   }
 });
 
 app.post("/register", (req, res) => {
-  if (req.body.email === "" || req.body.password === "" || checkEmailRepetition(users, req.body.email) !== null) {
+  if (req.body.email === "" || req.body.password === "" || getUserByEmail(users, req.body.email) !== undefined) {
     res.status(400);
-    res.redirect('https://http.cat/400');
+    res.render('error_page', { errorCode: 400, user: users[req.session.user_id] });
   } else {
     let randomId = generateRandomString();
     const password = req.body.password;
@@ -147,10 +124,10 @@ app.post("/urls/:shortURL/delete", (req, res) => {
   if (urlDatabase[req.params.shortURL].userID === req.session.user_id) {
     delete urlDatabase[req.params.shortURL];
     res.redirect('/urls/');
-  } else if (urlDatabase[req.params.shortURL].userID !== req.session.user_id){
+  } else if (urlDatabase[req.params.shortURL].userID !== req.session.user_id) {
     res.status(403);
-    res.redirect('https://http.cat/403');
-  } else if(users[req.session.user_id] === undefined){
+    res.render('error_page', { errorCode: 403, user: users[req.session.user_id] });
+  } else if (users[req.session.user_id] === undefined) {
     res.redirect("/login");
   }
 });
@@ -164,17 +141,19 @@ app.get("/u/:shortURL", (req, res) => {
 });
 
 app.get("/urls/:shortURL", (req, res) => {
-  let userURLs = urlsForUser(req.session.user_id);
+  let userURLs = urlsForUser(req.session.user_id, urlDatabase);
   if (urlDatabase[req.params.shortURL] !== undefined) {
     if (userURLs[req.params.shortURL] === undefined && urlDatabase[req.params.shortURL] !== undefined) {
       res.status(401);
-      res.redirect('https://http.cat/401');
+      res.render('error_page', { errorCode: 401, user: users[req.session.user_id] });
     }
-    let templateVars = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL, user: users[req.session.user_id] };
-    res.render("urls_show", templateVars);
+    else {
+      let templateVars = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL, user: users[req.session.user_id] };
+      res.render("urls_show", templateVars);
+    }
   } else if (urlDatabase[req.params.shortURL] === undefined && users[req.session.user_id] !== undefined) {
-    res.status(204);
-    res.redirect('https://http.cat/204');
+    res.status(404);
+    res.render('error_page', { errorCode: 404, user: users[req.session.user_id] });
   } else if (users[req.session.user_id] === undefined) {
     res.redirect("/login");
   }
@@ -186,7 +165,7 @@ app.post("/urls/:shortURL", (req, res) => {
     res.redirect('/urls');
   } else {
     res.status(403);
-    res.redirect('https://http.cat/403');
+    res.render('error_page', { errorCode: 403, user: users[req.session.user_id] });
   }
 });
 
