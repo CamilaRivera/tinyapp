@@ -1,4 +1,4 @@
-const { getUserByEmail, urlsForUser, generateRandomString } = require('./helpers');
+const { getUserByEmail, urlsForUser, generateRandomString, createDate, sumVisits } = require('./helpers');
 
 const express = require('express');
 const app = express();
@@ -6,20 +6,23 @@ const PORT = 8080;
 const bodyParser = require('body-parser');
 const cookieSession = require('cookie-session');
 const bcrypt = require('bcrypt');
+const methodOverride = require('method-override');
 
+app.use(methodOverride('_method'));
 app.use(cookieSession({
   name: 'session',
   keys: ['this-is-a-secret-key'],
   maxAge: 24 * 60 * 60 * 1000 // 24 hours
 }));
 app.use(bodyParser.urlencoded({ extended: true }));
+
 app.set('view engine', 'ejs');
 
 const urlDatabase = {
-  b6UTxQ: { longURL: 'https://www.tsn.ca', userID: 'userRandomID' },
-  i3BoGr: { longURL: 'https://www.google.ca', userID: 'user2RandomID' },
-  c6UTx3: { longURL: 'https://www.amazon.ca', userID: 'camila' },
-  c3BoG4: { longURL: 'https://www.cnn.com', userID: 'camila' }
+  b6UTxQ: { longURL: 'https://www.tsn.ca', userID: 'userRandomID', date: new Date(1567401768872) },
+  i3BoGr: { longURL: 'https://www.google.ca', userID: 'user2RandomID', date: new Date(1567401454872) },
+  c6UTx3: { longURL: 'https://www.amazon.ca', userID: 'camila', date: createDate() },
+  c3BoG4: { longURL: 'https://www.cnn.com', userID: 'camila', date: new Date(1567401164872) }
 };
 
 const users = {
@@ -40,6 +43,15 @@ const users = {
   }
 };
 
+const visitedURL = {
+  'b6UTxQ': { 'user1': 1, 'user2': 1 },
+  'c6UTx3': { 'elyol4': 3, 'user2': 1 },
+  'i3BoGr': { 'elyol4': 1, 'user2': 5, 'user1': 1 },
+  'c3BoG4': { 'user2': 5 }
+};
+
+
+
 app.get('/', (req, res) => {
   if (users[req.session.user_id] === undefined) {
     res.redirect('/login');
@@ -51,7 +63,9 @@ app.get('/', (req, res) => {
 app.get('/urls', (req, res) => {
   let templateVars = {
     urls: urlsForUser(req.session.user_id, urlDatabase),
-    user: users[req.session.user_id]
+    user: users[req.session.user_id],
+    visitedURL,
+    sumVisits
   };
   res.render('urls_index', templateVars);
 });
@@ -127,12 +141,12 @@ app.post('/urls', (req, res) => {
     if (!longURL.startsWith('http://') && !longURL.startsWith('https://')) {
       longURL = 'http://' + longURL;
     }
-    urlDatabase[randomString] = { longURL: longURL, userID: req.session.user_id };
+    urlDatabase[randomString] = { longURL: longURL, userID: req.session.user_id, date: createDate() };
     res.redirect('/urls/' + randomString);
   }
 });
 
-app.post('/urls/:shortURL/delete', (req, res) => {
+app.delete('/urls/:shortURL', (req, res) => {
   const urlObject = urlDatabase[req.params.shortURL];
   if (urlObject !== undefined && urlObject.userID === req.session.user_id) {
     delete urlDatabase[req.params.shortURL];
@@ -149,6 +163,21 @@ app.get('/u/:shortURL', (req, res) => {
     res.render('error_page', { errorCode: 404, user: users[req.session.user_id] });
   }
   else {
+    if (!req.session.visitorID) {
+      let randomId = generateRandomString();
+      req.session.visitorID = randomId;
+    }
+
+    let shortURLObj = visitedURL[req.params.shortURL];
+    if (shortURLObj === undefined) {
+      visitedURL[req.params.shortURL] = { [req.session.visitorID]: 1 };
+    } else {
+      if (shortURLObj[req.session.visitorID] === undefined) {
+        shortURLObj[req.session.visitorID] = 1;
+      } else {
+        shortURLObj[req.session.visitorID] += 1;
+      }
+    }
     const longURL = urlDatabase[req.params.shortURL].longURL;
     res.redirect(longURL);
   }
@@ -176,9 +205,9 @@ app.get('/urls/:shortURL', (req, res) => {
   }
 });
 
-app.post('/urls/:shortURL', (req, res) => {
+app.put('/urls/:shortURL', (req, res) => {
   if (urlDatabase[req.params.shortURL] !== undefined && urlDatabase[req.params.shortURL].userID === req.session.user_id) {
-    urlDatabase[req.params.shortURL] = { longURL: req.body.longURL, userID: req.session.user_id }
+    urlDatabase[req.params.shortURL] = { longURL: req.body.longURL, userID: req.session.user_id, date: createDate() }
     res.redirect('/urls');
   } else {
     res.status(403);
